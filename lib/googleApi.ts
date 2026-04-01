@@ -23,6 +23,7 @@ export async function createCalendarEvent(
     summary: string;
     start: string;
     end: string;
+    timeZone?: string;
   }
 ) {
   const auth = new google.auth.OAuth2();
@@ -34,8 +35,14 @@ export async function createCalendarEvent(
     calendarId: 'primary',
     requestBody: {
       summary: input.summary,
-      start: { dateTime: input.start },
-      end: { dateTime: input.end },
+      start: {
+        dateTime: input.start,
+        timeZone: input.timeZone,
+      },
+      end: {
+        dateTime: input.end,
+        timeZone: input.timeZone,
+      },
     },
   });
 

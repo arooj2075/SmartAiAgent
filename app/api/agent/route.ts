@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { createCalendarEvent, listCalendarEvents } from '@/lib/googleApi';
 
+const DEFAULT_TIME_ZONE = process.env.DEFAULT_TIME_ZONE || 'Asia/Dubai';
+
 function formatDateTime(value: string) {
   const date = new Date(value);
 
@@ -14,6 +16,7 @@ function formatDateTime(value: string) {
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: DEFAULT_TIME_ZONE,
   }).format(date);
 }
 
@@ -52,6 +55,53 @@ function parseExplicitDate(message: string) {
   return null;
 }
 
+function getTodayParts(timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+
+  return { year, month, day };
+}
+
+function addDays(
+  dateParts: { year: number; month: number; day: number },
+  days: number
+) {
+  const utcDate = new Date(
+    Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day + days)
+  );
+
+  return {
+    year: utcDate.getUTCFullYear(),
+    month: utcDate.getUTCMonth() + 1,
+    day: utcDate.getUTCDate(),
+  };
+}
+
+function formatCalendarDateTime(input: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}) {
+  const year = String(input.year);
+  const month = String(input.month).padStart(2, '0');
+  const day = String(input.day).padStart(2, '0');
+  const hour = String(input.hour).padStart(2, '0');
+  const minute = String(input.minute).padStart(2, '0');
+
+  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
 function parseCreateEvent(message: string) {
   const lower = message.toLowerCase();
   const createIntent =
@@ -79,20 +129,19 @@ function parseCreateEvent(message: string) {
   if (meridiem === 'pm' && hour < 12) hour += 12;
   if (meridiem === 'am' && hour === 12) hour = 0;
 
-  const start = new Date();
-  start.setSeconds(0, 0);
-
   const explicitDate = parseExplicitDate(message);
+  const today = getTodayParts(DEFAULT_TIME_ZONE);
+  let eventDate = today;
 
   if (explicitDate) {
-    start.setFullYear(explicitDate.year, explicitDate.month, explicitDate.day);
+    eventDate = {
+      year: explicitDate.year,
+      month: explicitDate.month + 1,
+      day: explicitDate.day,
+    };
   } else if (lower.includes('tomorrow')) {
-    start.setDate(start.getDate() + 1);
+    eventDate = addDays(today, 1);
   }
-
-  start.setHours(hour, minute, 0, 0);
-
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
 
   let summary = 'New Event';
   const titleMatch = message.match(
@@ -103,10 +152,25 @@ function parseCreateEvent(message: string) {
     summary = titleMatch[1].trim().replace(/^a\s+/i, '').replace(/^an\s+/i, '');
   }
 
+  const start = formatCalendarDateTime({
+    ...eventDate,
+    hour,
+    minute,
+  });
+
+  const endHour = (hour + 1) % 24;
+  const endDate = hour === 23 ? addDays(eventDate, 1) : eventDate;
+  const end = formatCalendarDateTime({
+    ...endDate,
+    hour: endHour,
+    minute,
+  });
+
   return {
     summary,
-    start: start.toISOString(),
-    end: end.toISOString(),
+    start,
+    end,
+    timeZone: DEFAULT_TIME_ZONE,
   };
 }
 
