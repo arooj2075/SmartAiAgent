@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createCalendarEvent, listCalendarEvents } from '@/lib/googleApi';
 
 const DEFAULT_TIME_ZONE = process.env.DEFAULT_TIME_ZONE || 'Asia/Dubai';
+const DEFAULT_TIME_OFFSET = process.env.DEFAULT_TIME_OFFSET || '+04:00';
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -99,7 +100,7 @@ function formatCalendarDateTime(input: {
   const hour = String(input.hour).padStart(2, '0');
   const minute = String(input.minute).padStart(2, '0');
 
-  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+  return `${year}-${month}-${day}T${hour}:${minute}:00${DEFAULT_TIME_OFFSET}`;
 }
 
 function parseCreateEvent(message: string) {
